@@ -38,6 +38,7 @@ This project develops a unique dataset from the public archives of the wonderful
       "speaker_name": "HITCHENS:",
       "text": "For a lot of people, their first love is what they'll always remember. For me it's always been the first hate, and I think that hatred, though it provides often rather junky energy, is a terrific way of getting you out of bed in the morning and keeping you going. If you don't let it get out of hand, it can be canalized into writing. In this country where people love to be nonjudgmental when they can be, which translates as, on the whole, lenient, there are an awful lot of bubble reputations floating around that one wouldn't be doing one's job if one didn't itch to prick."
     },
+    ...
   ],
   "related": [
     {
