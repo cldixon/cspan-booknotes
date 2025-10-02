@@ -2,7 +2,7 @@
 
 This project develops a unique dataset from the public archives of the wonderful CSPAN program [_Booknotes_](https://booknotes.c-span.org). The dataset includes transcripts of the conversations between the show's host, [Brian Lamb](https://en.wikipedia.org/wiki/Brian_Lamb), and his more than 800 guests.
 
-## Dataset Schema
+## Parsed JSON Schema
 
 ```json
 {
@@ -51,3 +51,13 @@ This project develops a unique dataset from the public archives of the wonderful
   ]
 }
 ```
+
+## Processed Tabular Schema
+
+### Programs
+
+
+### Transcripts
+
+
+### Related Items

@@ -49,7 +49,7 @@ def read_program(filepath: str) -> Program:
 
 
 class ProgramRow(TypedDict):
-    id: str
+    program_id: str
     guest: str
     title: str
     air_date: datetime
@@ -59,6 +59,7 @@ class ProgramRow(TypedDict):
 
 
 class TranscriptEntryRow(TypedDict):
+    program_id: str
     index: int
     speaker_role: Literal["host", "guest"]
     speaker_name: str
@@ -66,7 +67,8 @@ class TranscriptEntryRow(TypedDict):
 
 
 class RelatedItemRow(TypedDict):
-    id: str
+    program_id: str
+    related_id: str
     guest: str
     title: str
     url: str
@@ -103,7 +105,7 @@ def flatten_program_from_file(
 
     ## -- create program row (single dictionary)
     program_row = ProgramRow(
-        id=program.id,
+        program_id=program.id,
         title=program.title,
         air_date=air_datetime,
         book_isbn=program.book_isbn,
@@ -115,6 +117,7 @@ def flatten_program_from_file(
     ## -- create array of transcript entry rows
     transcript_entry_rows = [
         TranscriptEntryRow(
+            program_id=program.id,
             index=index,
             speaker_role=entry.speaker_role,
             speaker_name=entry.speaker_name,
@@ -126,7 +129,8 @@ def flatten_program_from_file(
     ## -- create array of related item rows (these are provided on program webpage)
     related_item_rows = [
         RelatedItemRow(
-            id=item.id,
+            program_id=program.id,
+            related_id=item.id,
             url=item.url,
             guest=item.author,  # <- couldn't decide on standard name for this field :)
             title=item.title,
@@ -195,15 +199,21 @@ def main():
         related_item_rows.extend(related_items)
 
     ## ---- DF-1. programs
-    programs_df = pl.DataFrame(program_rows)
+    programs_df = pl.DataFrame(program_rows).select(
+        "program_id", "guest", "title", "description", "air_date", "book_isbn", "url"
+    )
     print(f"> Created programs dataset with {len(program_rows):,} rows")
 
     ## ---- DF-2. transcripts
-    transcripts_df = pl.DataFrame(transcript_rows)
+    transcripts_df = pl.DataFrame(transcript_rows).select(
+        "program_id", "index", "speaker_role", "speaker_name", "text"
+    )
     print(f"> Created transcripts dataset with {len(transcript_rows):,} rows")
 
     ## ---- DF-3. related items
-    related_items_df = pl.DataFrame(related_item_rows)
+    related_items_df = pl.DataFrame(related_item_rows).select(
+        "program_id", "related_id", "guest", "title", "url"
+    )
     print(f"> Created related items dataset with {len(related_item_rows):,} rows")
 
     ## -- write parquet files
