@@ -7,10 +7,12 @@ requires-python = ">=3.12"
 dependencies = [
     "bs4>=0.0.2",
     "lxml>=6.0.2",
+    "obstore>=0.8.2",
     "polars>=1.33.1",
     "pydantic>=2.11.9",
     "ray>=2.49.2",
     "requests>=2.32.5",
+    "tqdm>=4.67.1",
 ]
 
 [dependency-groups]

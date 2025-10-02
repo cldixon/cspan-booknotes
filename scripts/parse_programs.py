@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 import polars as pl
 import ray
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 from cspan_booknotes import get_program_page
 from cspan_booknotes.constants import ROOT_URL
@@ -31,6 +32,9 @@ os.makedirs(HTML_CACHE_DIR, exist_ok=True)
 
 PARSED_PROGRAM_DIR = PROJECT_ROOT / "data" / "programs"
 os.makedirs(PARSED_PROGRAM_DIR, exist_ok=True)
+
+## -- NUMBER OF CONCURRENT STORES FOR READING JSON FILES
+NUM_STORES: int = 4
 
 
 def read_html_from_file(filepath) -> BeautifulSoup:
@@ -92,20 +96,37 @@ def main():
     print(f"Loaded {len(df)} index entries from '{AUTHOR_INDEX_FILEPATH}'")
 
     ## -- build urls for all index pages
-    all_program_page_urls = [
+    program_page_urls = [
         urljoin(ROOT_URL, path) for path in df["program_path"].to_list()
     ]
-    print(f"Example program URLs: {all_program_page_urls[:3]}")
+    print(f"Example program URLs: {program_page_urls[:3]}")
 
-    all_programs = ray.get(
-        [parse_program_webpage.remote(url) for url in all_program_page_urls]
+    all_program_results = []
+    futures = [parse_program_webpage.remote(url) for url in program_page_urls]
+
+    progress_bar = tqdm(
+        total=len(program_page_urls), desc="Processing parsed programs..."
     )
+
+    while futures:
+        ## -- wait for first task to complete
+        ready, futures = ray.wait(futures, num_returns=1)
+
+        # -- get results from completed tasks
+        for future in ready:
+            result = ray.get(future)
+            all_program_results.append(result)
+            progress_bar.update(1)
+            progress_bar.set_postfix(completed=len(all_program_results))
+
+    progress_bar.close()
+    ray.shutdown()
 
     ## -- check total results parsed
     num_parsed_programs = len(os.listdir(PARSED_PROGRAM_DIR))
     num_webpages_cached = len(os.listdir(HTML_CACHE_DIR))
-    print(f"Total programs parsed: {num_parsed_programs}/{len(all_program_page_urls)}")
-    print(f"Total webpages cached: {num_webpages_cached}/{len(all_program_page_urls)}")
+    print(f"Total programs parsed: {num_parsed_programs}/{len(program_page_urls)}")
+    print(f"Total webpages cached: {num_webpages_cached}/{len(program_page_urls)}")
     return
 
 

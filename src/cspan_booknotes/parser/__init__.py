@@ -38,7 +38,7 @@ class ProgramParser:
     def _get_program_title(self, html: BeautifulSoup) -> str:
         return get_program_title(html)
 
-    def _get_program_description(self, html: BeautifulSoup) -> str:
+    def _get_program_description(self, html: BeautifulSoup) -> str | None:
         return get_program_description(html)
 
     def _get_air_date(self, html: BeautifulSoup) -> str:
@@ -47,7 +47,7 @@ class ProgramParser:
     def _get_guest_author(self, html: BeautifulSoup) -> str:
         return get_guest_author(html)
 
-    def _get_book_isbn(self, html: BeautifulSoup) -> str:
+    def _get_book_isbn(self, html: BeautifulSoup) -> str | None:
         return get_book_isbn(html)
 
     def _get_transcript(self, html: BeautifulSoup) -> list[TranscriptEntry]:
