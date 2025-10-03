@@ -60,7 +60,7 @@ class ProgramRow(TypedDict):
 
 class TranscriptEntryRow(TypedDict):
     program_id: str
-    index: int
+    sequence: int
     speaker_role: Literal["host", "guest"]
     speaker_name: str
     text: str
@@ -118,12 +118,12 @@ def flatten_program_from_file(
     transcript_entry_rows = [
         TranscriptEntryRow(
             program_id=program.id,
-            index=index,
+            sequence=i,
             speaker_role=entry.speaker_role,
             speaker_name=entry.speaker_name,
             text=entry.text,
         )
-        for index, entry in enumerate(program.transcript)
+        for i, entry in enumerate(program.transcript)
     ]
 
     ## -- create array of related item rows (these are provided on program webpage)
@@ -206,7 +206,7 @@ def main():
 
     ## ---- DF-2. transcripts
     transcripts_df = pl.DataFrame(transcript_rows).select(
-        "program_id", "index", "speaker_role", "speaker_name", "text"
+        "program_id", "sequence", "speaker_role", "speaker_name", "text"
     )
     print(f"> Created transcripts dataset with {len(transcript_rows):,} rows")
 

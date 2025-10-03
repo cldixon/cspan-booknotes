@@ -1,0 +1,20 @@
+configs:
+  - config_name: programs
+    data_files: programs.parquet
+  - config_name: transcripts
+    data_files: transcripts.parquet
+  - config_name: related_items
+    data_files: related_items.parquet
+license: mit
+task_categories:
+  - summarization
+  - text-generation
+language:
+  - en
+tags:
+  - politics
+  - cspan
+  - chat
+pretty_name: cspan-booknotes
+size_categories:
+  - 100K<n<1M
