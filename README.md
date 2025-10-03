@@ -1,3 +1,13 @@
+---
+configs:
+- config_name: programs
+  data_files: "programs.parquet"
+- config_name: transcripts
+  data_files: "transcripts.parquet"
+- config_name: related_items
+  data_files: "related_items.parquet"
+---
+
 # CSPAN Booknotes - Chat Dataset
 
 This project develops a unique dataset from the public archives of the wonderful CSPAN program [_Booknotes_](https://booknotes.c-span.org). The dataset includes transcripts of the conversations between the show's host, [Brian Lamb](https://en.wikipedia.org/wiki/Brian_Lamb), and his more than 800 guests.
