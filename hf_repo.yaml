@@ -15,6 +15,10 @@ tags:
   - politics
   - cspan
   - chat
+library_name:
+  - datasets
+  - transformers
+  - polars
 pretty_name: cspan-booknotes
 size_categories:
   - 100K<n<1M
