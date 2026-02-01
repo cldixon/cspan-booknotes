@@ -12,6 +12,13 @@ app.get('/health', (c) => {
 });
 
 // API routes
+app.get('/api/hello', (c) => {
+  return c.json({
+    message: 'Hello from CSPAN Booknotes API!',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/api/shows', (c) => {
   // TODO: Fetch from Neon DB
   return c.json({ shows: [] });
