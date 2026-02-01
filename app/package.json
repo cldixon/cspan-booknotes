@@ -1,0 +1,21 @@
+{
+  "name": "cspan-booknotes-app",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "web",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "bun run --parallel dev:web dev:server",
+    "dev:web": "cd web && bun run dev",
+    "dev:server": "cd server && bun run dev",
+    "build": "bun run build:web && bun run build:server",
+    "build:web": "cd web && bun run build",
+    "build:server": "cd server && bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

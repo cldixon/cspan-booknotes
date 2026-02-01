@@ -9,5 +9,32 @@ wheels/
 # Virtual environments
 .venv
 .env
-data/
-pyrightconfig.json
+
+# Python data and config
+dataset/data/
+dataset/pyrightconfig.json
+
+# Node/Bun
+node_modules/
+.bun/
+bun.lockb
+
+# Build outputs
+app/web/.svelte-kit/
+app/web/build/
+app/server/dist/
+
+# Environment variables
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
