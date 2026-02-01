@@ -2,6 +2,12 @@
 
 This guide will help you deploy the CSPAN Booknotes app to Railway.
 
+## ⚠️ IMPORTANT: Monorepo Configuration
+
+This is a **monorepo** with services in subdirectories. You **must** configure the Root Directory for each service.
+
+**📖 Having issues? See [RAILWAY_SETUP.md](RAILWAY_SETUP.md) for detailed monorepo configuration help.**
+
 ## Overview
 
 The app consists of two services:
@@ -27,9 +33,11 @@ The app consists of two services:
 
 1. In your Railway project, click "New Service"
 2. Select your GitHub repository
-3. Configure the service:
+3. Go to **Settings** → **Source**:
+   - **⚠️ CRITICAL**: Set **Root Directory** to `app/server`
+   - **Branch**: Select your branch (e.g., `poc-chat-app`)
+4. Configure build settings (Settings → Build):
    - **Service Name**: `booknotes-api`
-   - **Root Directory**: `app/server`
    - **Build Command**: `bun install && bun run build`
    - **Start Command**: `bun run start`
 
@@ -45,9 +53,11 @@ The app consists of two services:
 
 1. Click "New Service" again
 2. Select your GitHub repository
-3. Configure the service:
+3. Go to **Settings** → **Source**:
+   - **⚠️ CRITICAL**: Set **Root Directory** to `app/web`
+   - **Branch**: Select your branch (e.g., `poc-chat-app`)
+4. Configure build settings (Settings → Build):
    - **Service Name**: `booknotes-web`
-   - **Root Directory**: `app/web`
    - **Build Command**: `bun install && bun run build`
    - **Start Command**: `node build`
 
