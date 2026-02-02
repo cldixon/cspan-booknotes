@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { TranscriptTurn, Program } from './db';
+import { buildSystemPrompt, buildUserPrompt } from './prompts';
 
 const anthropic = new Anthropic();
 
@@ -27,73 +28,6 @@ const RESUME_CONTINUE_PHRASES = [
 
 function getRandomPhrase(phrases: string[]): string {
   return phrases[Math.floor(Math.random() * phrases.length)];
-}
-
-function buildSystemPrompt(program: Program): string {
-  return `You are simulating a continuation of a conversation from the C-SPAN show "Booknotes" hosted by Brian Lamb. The show aired from 1989-2004 and featured hour-long interviews with authors about their books.
-
-EPISODE CONTEXT:
-- Guest: ${program.guest}
-- Book: ${program.book_title || program.title}
-- Original Air Date: ${program.air_date ? new Date(program.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Unknown'}
-- Summary: ${program.summary || 'No summary available'}
-
-YOUR TASK:
-Generate a natural continuation of this interview as if Brian Lamb and ${program.guest} have returned to continue their conversation. You must simulate BOTH speakers.
-
-CHARACTER GUIDELINES:
-
-Brian Lamb (Host):
-- Asks direct, probing questions without editorializing
-- Known for his neutral, curious interviewing style
-- Lets guests speak at length without interruption
-- Often asks "why" and "how" questions
-- Interested in the process of writing and research
-- May reference specific passages or details from the book
-
-${program.guest} (Guest):
-- Should respond in character based on their background and the book's subject matter
-- Should maintain consistency with views expressed in the original interview
-- Can elaborate on themes from their book
-- Should sound like an articulate author/expert in their field
-
-FORMAT:
-Output the conversation as alternating turns. Each turn should be on its own line in this exact format:
-LAMB: [Brian Lamb's dialogue]
-GUEST: [${program.guest}'s dialogue]
-
-Generate 2-5 natural exchanges (4-10 turns total). End at a natural pause point in the conversation.
-
-IMPORTANT:
-- Stay in character throughout
-- Make the dialogue feel authentic to the show's style
-- The conversation should feel intellectually substantive
-- Do not break character or add meta-commentary
-- Do not use quotation marks around the dialogue`;
-}
-
-function buildUserPrompt(program: Program, recentTranscript: TranscriptTurn[], userTopic: string | null): string {
-  // Format recent transcript for context
-  const transcriptContext = recentTranscript
-    .map(turn => {
-      const isLamb = turn.speaker.toLowerCase().includes('lamb');
-      const prefix = isLamb ? 'LAMB' : 'GUEST';
-      return `${prefix}: ${turn.text}`;
-    })
-    .join('\n\n');
-
-  let prompt = `Here is the recent conversation for context:\n\n${transcriptContext}\n\n`;
-
-  if (userTopic) {
-    const transitionPhrase = getRandomPhrase(RESUME_WITH_TOPIC_PHRASES);
-    prompt += `A viewer has called in with this topic/question: "${userTopic}"\n\n`;
-    prompt += `Continue the conversation with Brian Lamb introducing this topic using a phrase like "${transitionPhrase}..." and then the guest responding. Generate 2-5 exchanges.`;
-  } else {
-    const transitionPhrase = getRandomPhrase(RESUME_CONTINUE_PHRASES);
-    prompt += `Continue the conversation naturally. Brian Lamb should ask a follow-up question or explore a new angle related to the book and discussion so far. Use a transition like "${transitionPhrase}..." Generate 2-5 exchanges.`;
-  }
-
-  return prompt;
 }
 
 function parseGeneratedTurns(text: string, guestName: string): TranscriptTurn[] {
@@ -138,8 +72,12 @@ export async function resumeConversation(
   // Get recent transcript for context
   const recentTranscript = program.transcript.slice(-CONTEXT_TURNS);
 
+  const transitionPhrase = userTopic
+    ? getRandomPhrase(RESUME_WITH_TOPIC_PHRASES)
+    : getRandomPhrase(RESUME_CONTINUE_PHRASES);
+
   const systemPrompt = buildSystemPrompt(program);
-  const userPrompt = buildUserPrompt(program, recentTranscript, userTopic);
+  const userPrompt = buildUserPrompt(program, recentTranscript, userTopic, transitionPhrase);
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -170,8 +108,12 @@ export async function* resumeConversationStream(
   // Get recent transcript for context
   const recentTranscript = program.transcript.slice(-CONTEXT_TURNS);
 
+  const transitionPhrase = userTopic
+    ? getRandomPhrase(RESUME_WITH_TOPIC_PHRASES)
+    : getRandomPhrase(RESUME_CONTINUE_PHRASES);
+
   const systemPrompt = buildSystemPrompt(program);
-  const userPrompt = buildUserPrompt(program, recentTranscript, userTopic);
+  const userPrompt = buildUserPrompt(program, recentTranscript, userTopic, transitionPhrase);
 
   const stream = await anthropic.messages.stream({
     model: MODEL,
