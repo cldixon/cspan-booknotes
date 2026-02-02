@@ -16,6 +16,7 @@ RUN bun run build
 # Production image
 FROM base AS release
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/prompts ./prompts
 COPY --from=build /app/package.json ./
 
 # Set environment variables
