@@ -45,26 +45,22 @@ export async function load({ fetch }) {
 	const apiUrl = env.API_URL || 'http://localhost:3000';
 
 	try {
-		// Fetch a random episode with full transcript for initial view
-		const randomRes = await fetch(`${apiUrl}/api/episodes/random`);
-		if (!randomRes.ok) {
-			throw new Error(`Failed to fetch random episode: ${randomRes.status}`);
-		}
-		const randomEpisodeBasic: EpisodeListItem = await randomRes.json();
-
-		// Fetch full episode details including transcript
-		const episodeRes = await fetch(`${apiUrl}/api/episodes/${randomEpisodeBasic.id}`);
-		if (!episodeRes.ok) {
-			throw new Error(`Failed to fetch episode details: ${episodeRes.status}`);
-		}
-		const currentEpisode: Episode = await episodeRes.json();
-
-		// Fetch episode list for the guest drawer
-		const episodesRes = await fetch(`${apiUrl}/api/episodes?limit=50`);
+		// Fetch all episodes for the guest drawer, sorted by guest last name
+		const episodesRes = await fetch(`${apiUrl}/api/episodes?sort=guest_last_name`);
 		if (!episodesRes.ok) {
 			throw new Error(`Failed to fetch episodes: ${episodesRes.status}`);
 		}
 		const episodesData: EpisodesResponse = await episodesRes.json();
+
+		// Default to Christopher Hitchens episode
+		const defaultEpisodeId = '159943-1';
+
+		// Fetch full episode details including transcript
+		const episodeRes = await fetch(`${apiUrl}/api/episodes/${defaultEpisodeId}`);
+		if (!episodeRes.ok) {
+			throw new Error(`Failed to fetch episode details: ${episodeRes.status}`);
+		}
+		const currentEpisode: Episode = await episodeRes.json();
 
 		return {
 			currentEpisode,

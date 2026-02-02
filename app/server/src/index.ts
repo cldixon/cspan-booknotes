@@ -19,36 +19,61 @@ app.get('/health', (c) => {
 
 // Get paginated list of episodes
 app.get('/api/episodes', async (c) => {
-  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 100);
+  const limitParam = c.req.query('limit');
+  // If no limit specified, return all. Otherwise cap at 1000.
+  const limit = limitParam ? Math.min(parseInt(limitParam), 1000) : 1000;
   const offset = parseInt(c.req.query('offset') || '0');
   const search = c.req.query('search') || '';
+  const sort = c.req.query('sort') || 'air_date'; // 'air_date' or 'guest_last_name'
 
   try {
     let episodes: ProgramListItem[];
     let total: number;
 
+    // Build ORDER BY clause based on sort parameter
+    const orderByLastName = sort === 'guest_last_name';
+
     if (search) {
       // Search by guest name or title
       const searchPattern = `%${search}%`;
-      episodes = await sql<ProgramListItem[]>`
-        SELECT id, title, guest, air_date, summary, book_title
-        FROM programs
-        WHERE guest ILIKE ${searchPattern} OR title ILIKE ${searchPattern}
-        ORDER BY air_date DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+      if (orderByLastName) {
+        episodes = await sql<ProgramListItem[]>`
+          SELECT id, title, guest, air_date, summary, book_title
+          FROM programs
+          WHERE guest ILIKE ${searchPattern} OR title ILIKE ${searchPattern}
+          ORDER BY SPLIT_PART(guest, ' ', -1) ASC, guest ASC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      } else {
+        episodes = await sql<ProgramListItem[]>`
+          SELECT id, title, guest, air_date, summary, book_title
+          FROM programs
+          WHERE guest ILIKE ${searchPattern} OR title ILIKE ${searchPattern}
+          ORDER BY air_date DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      }
       const countResult = await sql`
         SELECT COUNT(*) as count FROM programs
         WHERE guest ILIKE ${searchPattern} OR title ILIKE ${searchPattern}
       `;
       total = parseInt(countResult[0].count);
     } else {
-      episodes = await sql<ProgramListItem[]>`
-        SELECT id, title, guest, air_date, summary, book_title
-        FROM programs
-        ORDER BY air_date DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+      if (orderByLastName) {
+        episodes = await sql<ProgramListItem[]>`
+          SELECT id, title, guest, air_date, summary, book_title
+          FROM programs
+          ORDER BY SPLIT_PART(guest, ' ', -1) ASC, guest ASC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      } else {
+        episodes = await sql<ProgramListItem[]>`
+          SELECT id, title, guest, air_date, summary, book_title
+          FROM programs
+          ORDER BY air_date DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      }
       const countResult = await sql`SELECT COUNT(*) as count FROM programs`;
       total = parseInt(countResult[0].count);
     }
