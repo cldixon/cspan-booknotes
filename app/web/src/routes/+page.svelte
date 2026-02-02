@@ -62,9 +62,18 @@
 		}
 	}
 
-	// Scroll to bottom on mount
+	// Scroll to bottom on mount - use tick and requestAnimationFrame to ensure DOM is ready
 	onMount(() => {
+		// Multiple attempts to ensure scroll happens after render
 		scrollToBottom();
+		requestAnimationFrame(() => {
+			scrollToBottom();
+			requestAnimationFrame(scrollToBottom);
+		});
+		// Fallback timeout for slower renders
+		setTimeout(scrollToBottom, 100);
+		setTimeout(scrollToBottom, 300);
+
 		document.addEventListener('keydown', closeDrawerOnEscape);
 		return () => document.removeEventListener('keydown', closeDrawerOnEscape);
 	});
