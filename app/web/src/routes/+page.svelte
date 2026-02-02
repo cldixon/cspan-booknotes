@@ -1,26 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-
 	let { data } = $props();
-
-	let apiMessage = $state('Loading...');
-	let apiTimestamp = $state('');
-	let error = $state('');
-
-	onMount(async () => {
-		try {
-			const response = await fetch(`${data.apiUrl}/api/hello`);
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
-			}
-			const result = await response.json();
-			apiMessage = result.message;
-			apiTimestamp = result.timestamp;
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Unknown error';
-			apiMessage = 'Failed to connect to API';
-		}
-	});
 </script>
 
 <div class="container">
@@ -32,12 +11,12 @@
 	<main>
 		<div class="api-test">
 			<h2>API Connection Test</h2>
-			{#if error}
-				<p class="error">Error: {error}</p>
+			{#if data.error}
+				<p class="error">Error: {data.error}</p>
 			{:else}
-				<p class="success">{apiMessage}</p>
-				{#if apiTimestamp}
-					<p class="timestamp">Server Time: {new Date(apiTimestamp).toLocaleString()}</p>
+				<p class="success">{data.apiMessage}</p>
+				{#if data.apiTimestamp}
+					<p class="timestamp">Server Time: {new Date(data.apiTimestamp).toLocaleString()}</p>
 				{/if}
 			{/if}
 		</div>
