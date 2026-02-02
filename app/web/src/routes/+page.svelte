@@ -15,6 +15,10 @@
 	// Generated turns that will be appended to the transcript display
 	let generatedTurns = $state<Array<{ speaker: string; text: string; is_generated?: boolean }>>([]);
 
+	// Currently typing turn (word by word effect)
+	let typingTurn = $state<{ speaker: string; text: string; is_generated?: boolean } | null>(null);
+	let typingText = $state('');
+
 	// Combined transcript for display
 	let displayTranscript = $derived([
 		...(currentEpisode?.transcript || []),
@@ -53,6 +57,8 @@
 			if (res.ok) {
 				currentEpisode = await res.json();
 				generatedTurns = []; // Reset generated turns for new episode
+				typingTurn = null;
+				typingText = '';
 				setTimeout(scrollToBottom, 100);
 			}
 		} catch (e) {
@@ -60,10 +66,62 @@
 		}
 	}
 
+	// Type out text word by word with natural variation
+	async function typeText(text: string): Promise<void> {
+		const words = text.split(' ');
+		typingText = '';
+
+		for (let i = 0; i < words.length; i++) {
+			typingText += (i === 0 ? '' : ' ') + words[i];
+			scrollToBottom();
+
+			// Variable delay: shorter for small words, longer for punctuation
+			const word = words[i];
+			let delay = 30 + Math.random() * 40; // Base 30-70ms per word
+
+			// Longer pauses for punctuation
+			if (word.endsWith('.') || word.endsWith('?') || word.endsWith('!')) {
+				delay += 150 + Math.random() * 100;
+			} else if (word.endsWith(',') || word.endsWith(';') || word.endsWith(':')) {
+				delay += 50 + Math.random() * 50;
+			}
+
+			await new Promise((resolve) => setTimeout(resolve, delay));
+		}
+	}
+
+	// Animate a single turn with typing effect
+	async function animateTurn(turn: { speaker: string; text: string; is_generated?: boolean }): Promise<void> {
+		// Show the speaker label and start typing
+		typingTurn = turn;
+		typingText = '';
+
+		// Small pause before typing starts
+		await new Promise((resolve) => setTimeout(resolve, 300));
+
+		// Type out the text
+		await typeText(turn.text);
+
+		// Small pause after completing
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		// Move completed turn to generatedTurns
+		generatedTurns = [...generatedTurns, turn];
+		typingTurn = null;
+		typingText = '';
+
+		// Pause between speakers
+		await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 500));
+	}
+
 	async function resumeConversation(topic: string | null = null) {
 		if (!currentEpisode || isGenerating) return;
 
 		isGenerating = true;
+
+		// Queue to hold turns as they arrive from the stream
+		const turnQueue: Array<{ speaker: string; text: string; is_generated?: boolean }> = [];
+		let streamDone = false;
 
 		try {
 			const res = await fetch('/api/chat', {
@@ -79,55 +137,66 @@
 				throw new Error('Failed to resume conversation');
 			}
 
-			// Process SSE stream
-			const reader = res.body?.getReader();
-			const decoder = new TextDecoder();
+			// Process SSE stream in background
+			const processStream = async () => {
+				const reader = res.body?.getReader();
+				const decoder = new TextDecoder();
 
-			if (!reader) {
-				throw new Error('No response body');
-			}
+				if (!reader) {
+					throw new Error('No response body');
+				}
 
-			let buffer = '';
+				let buffer = '';
 
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
 
-				buffer += decoder.decode(value, { stream: true });
+					buffer += decoder.decode(value, { stream: true });
 
-				// Process complete SSE messages
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || ''; // Keep incomplete line in buffer
+					const lines = buffer.split('\n');
+					buffer = lines.pop() || '';
 
-				for (const line of lines) {
-					if (line.startsWith('event: ')) {
-						const eventType = line.slice(7).trim();
-						continue;
-					}
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							const jsonStr = line.slice(6);
+							try {
+								const eventData = JSON.parse(jsonStr);
 
-					if (line.startsWith('data: ')) {
-						const jsonStr = line.slice(6);
-						try {
-							const eventData = JSON.parse(jsonStr);
-
-							if (eventData.speaker && eventData.text) {
-								// It's a turn
-								generatedTurns = [...generatedTurns, eventData];
-								// Scroll to bottom after each turn
-								await new Promise((resolve) => setTimeout(resolve, 50));
-								scrollToBottom();
-							} else if (eventData.sessionId) {
-								// It's the done event
-								console.log('Conversation saved:', eventData);
-							} else if (eventData.error) {
-								console.error('Stream error:', eventData.error);
+								if (eventData.speaker && eventData.text) {
+									turnQueue.push(eventData);
+								} else if (eventData.sessionId) {
+									console.log('Conversation saved:', eventData);
+								} else if (eventData.error) {
+									console.error('Stream error:', eventData.error);
+								}
+							} catch {
+								// Ignore parse errors
 							}
-						} catch {
-							// Ignore parse errors for incomplete data
 						}
 					}
 				}
-			}
+
+				streamDone = true;
+			};
+
+			// Start stream processing
+			const streamPromise = processStream();
+
+			// Animate turns as they arrive
+			const animateLoop = async () => {
+				while (!streamDone || turnQueue.length > 0) {
+					if (turnQueue.length > 0) {
+						const turn = turnQueue.shift()!;
+						await animateTurn(turn);
+					} else {
+						// Wait a bit for more turns
+						await new Promise((resolve) => setTimeout(resolve, 100));
+					}
+				}
+			};
+
+			await Promise.all([streamPromise, animateLoop()]);
 
 			// Clear topic input after successful generation
 			topicInput = '';
@@ -135,6 +204,8 @@
 			console.error('Error resuming conversation:', e);
 		} finally {
 			isGenerating = false;
+			typingTurn = null;
+			typingText = '';
 			scrollToBottom();
 		}
 	}
@@ -153,6 +224,8 @@
 
 	function handleRestart() {
 		generatedTurns = [];
+		typingTurn = null;
+		typingText = '';
 		scrollToBottom();
 	}
 
@@ -256,6 +329,24 @@
 							</div>
 						{/each}
 
+						<!-- Currently typing turn -->
+						{#if typingTurn}
+							<div class="transcript-entry generated typing-active">
+								<div
+									class="speaker-label"
+									class:speaker-lamb={typingTurn.speaker.toLowerCase().includes('lamb')}
+									class:speaker-guest={!typingTurn.speaker.toLowerCase().includes('lamb')}
+								>
+									<span class="speaker-dot"></span>
+									{typingTurn.speaker}
+									<span class="generated-badge">AI</span>
+								</div>
+								<div class="transcript-text">
+									{typingText}<span class="typing-cursor">|</span>
+								</div>
+							</div>
+						{/if}
+
 						<!-- Typing indicator -->
 						<div class="typing-indicator">
 							<div class="typing-dots">
@@ -263,8 +354,10 @@
 								<span></span>
 								<span></span>
 							</div>
-							{#if isGenerating}
-								Generating conversation...
+							{#if isGenerating && !typingTurn}
+								Preparing response...
+							{:else if isGenerating}
+								Conversation in progress...
 							{:else}
 								Waiting to resume conversation...
 							{/if}
@@ -566,6 +659,10 @@
 		border-left: 3px solid var(--cspan-gold);
 	}
 
+	.transcript-entry.typing-active {
+		background: linear-gradient(90deg, rgba(201, 162, 39, 0.2) 0%, rgba(201, 162, 39, 0.05) 100%);
+	}
+
 	.speaker-label {
 		font-family: Georgia, serif;
 		font-weight: bold;
@@ -615,6 +712,22 @@
 		line-height: 1.65;
 		color: #333;
 		padding-left: 14px;
+	}
+
+	.typing-cursor {
+		display: inline-block;
+		animation: blink 0.8s infinite;
+		color: var(--cspan-blue-mid);
+		font-weight: bold;
+	}
+
+	@keyframes blink {
+		0%, 50% {
+			opacity: 1;
+		}
+		51%, 100% {
+			opacity: 0;
+		}
 	}
 
 	/* Typing indicator */
