@@ -1,8 +1,13 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { sql, type Program, type ProgramListItem } from './db';
+import { streamSSE } from 'hono/streaming';
+import { sql, initializeSchema, saveConversationSession, type Program, type ProgramListItem, type TranscriptTurn } from './db';
+import { resumeConversationStream } from './llm';
 
 const app = new Hono();
+
+// Initialize database schema on startup
+initializeSchema().catch(console.error);
 
 // Enable CORS for the frontend
 app.use('/*', cors());
@@ -103,10 +108,83 @@ app.get('/api/episodes/:id', async (c) => {
   }
 });
 
-// Placeholder for chat resume endpoint (will implement with Claude later)
+// Resume conversation with streaming
 app.post('/api/chat/resume', async (c) => {
-  // TODO: Implement Claude-based conversation resumption
-  return c.json({ message: 'Not implemented yet' });
+  try {
+    const body = await c.req.json();
+    const { programId, topic, sessionToken } = body;
+
+    if (!programId) {
+      return c.json({ error: 'programId is required' }, 400);
+    }
+
+    // Fetch the program
+    const programs = await sql<Program[]>`
+      SELECT * FROM programs WHERE id = ${programId}
+    `;
+
+    if (programs.length === 0) {
+      return c.json({ error: 'Episode not found' }, 404);
+    }
+
+    const program = programs[0];
+    const userTopic = topic?.trim() || null;
+
+    // Stream the response using SSE
+    return streamSSE(c, async (stream) => {
+      const generatedTurns: TranscriptTurn[] = [];
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let model = '';
+
+      try {
+        for await (const event of resumeConversationStream(program, userTopic)) {
+          if (event.type === 'turn' && event.turn) {
+            generatedTurns.push(event.turn);
+            await stream.writeSSE({
+              event: 'turn',
+              data: JSON.stringify(event.turn),
+            });
+          } else if (event.type === 'done') {
+            inputTokens = event.inputTokens || 0;
+            outputTokens = event.outputTokens || 0;
+            model = event.model || '';
+          }
+        }
+
+        // Save the session to the database
+        const sessionId = await saveConversationSession({
+          program_id: programId,
+          session_token: sessionToken || null,
+          user_topic: userTopic,
+          generated_turns: generatedTurns,
+          model,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+        });
+
+        // Send completion event
+        await stream.writeSSE({
+          event: 'done',
+          data: JSON.stringify({
+            sessionId,
+            inputTokens,
+            outputTokens,
+            model,
+          }),
+        });
+      } catch (error) {
+        console.error('Error in conversation stream:', error);
+        await stream.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ error: 'Failed to generate conversation' }),
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Error resuming conversation:', error);
+    return c.json({ error: 'Failed to resume conversation' }, 500);
+  }
 });
 
 const port = process.env.PORT || 3000;

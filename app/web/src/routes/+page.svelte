@@ -5,10 +5,21 @@
 
 	let drawerOpen = $state(false);
 	let searchQuery = $state('');
+	let topicInput = $state('');
+	let isGenerating = $state(false);
 	let transcriptArea: HTMLElement;
 
 	// Current episode state (can be changed via drawer)
 	let currentEpisode = $state(data.currentEpisode);
+
+	// Generated turns that will be appended to the transcript display
+	let generatedTurns = $state<Array<{ speaker: string; text: string; is_generated?: boolean }>>([]);
+
+	// Combined transcript for display
+	let displayTranscript = $derived([
+		...(currentEpisode?.transcript || []),
+		...generatedTurns
+	]);
 
 	// Filter episodes based on search
 	let filteredEpisodes = $derived(
@@ -32,7 +43,6 @@
 	}
 
 	function selectEpisode(episode: typeof data.episodes[0]) {
-		// Fetch full episode data
 		fetchEpisode(episode.id);
 		drawerOpen = false;
 	}
@@ -42,11 +52,114 @@
 			const res = await fetch(`/api/episode/${id}`);
 			if (res.ok) {
 				currentEpisode = await res.json();
-				// Scroll to bottom after data loads
+				generatedTurns = []; // Reset generated turns for new episode
 				setTimeout(scrollToBottom, 100);
 			}
 		} catch (e) {
 			console.error('Failed to fetch episode:', e);
+		}
+	}
+
+	async function resumeConversation(topic: string | null = null) {
+		if (!currentEpisode || isGenerating) return;
+
+		isGenerating = true;
+
+		try {
+			const res = await fetch('/api/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					programId: currentEpisode.id,
+					topic: topic
+				})
+			});
+
+			if (!res.ok) {
+				throw new Error('Failed to resume conversation');
+			}
+
+			// Process SSE stream
+			const reader = res.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (!reader) {
+				throw new Error('No response body');
+			}
+
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+
+				// Process complete SSE messages
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+				for (const line of lines) {
+					if (line.startsWith('event: ')) {
+						const eventType = line.slice(7).trim();
+						continue;
+					}
+
+					if (line.startsWith('data: ')) {
+						const jsonStr = line.slice(6);
+						try {
+							const eventData = JSON.parse(jsonStr);
+
+							if (eventData.speaker && eventData.text) {
+								// It's a turn
+								generatedTurns = [...generatedTurns, eventData];
+								// Scroll to bottom after each turn
+								await new Promise((resolve) => setTimeout(resolve, 50));
+								scrollToBottom();
+							} else if (eventData.sessionId) {
+								// It's the done event
+								console.log('Conversation saved:', eventData);
+							} else if (eventData.error) {
+								console.error('Stream error:', eventData.error);
+							}
+						} catch {
+							// Ignore parse errors for incomplete data
+						}
+					}
+				}
+			}
+
+			// Clear topic input after successful generation
+			topicInput = '';
+		} catch (e) {
+			console.error('Error resuming conversation:', e);
+		} finally {
+			isGenerating = false;
+			scrollToBottom();
+		}
+	}
+
+	function handleContinue() {
+		resumeConversation(null);
+	}
+
+	function handleCallIn() {
+		if (topicInput.trim()) {
+			resumeConversation(topicInput.trim());
+		} else {
+			resumeConversation(null);
+		}
+	}
+
+	function handleRestart() {
+		generatedTurns = [];
+		scrollToBottom();
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			handleCallIn();
 		}
 	}
 
@@ -62,15 +175,12 @@
 		}
 	}
 
-	// Scroll to bottom on mount - use tick and requestAnimationFrame to ensure DOM is ready
 	onMount(() => {
-		// Multiple attempts to ensure scroll happens after render
 		scrollToBottom();
 		requestAnimationFrame(() => {
 			scrollToBottom();
 			requestAnimationFrame(scrollToBottom);
 		});
-		// Fallback timeout for slower renders
 		setTimeout(scrollToBottom, 100);
 		setTimeout(scrollToBottom, 300);
 
@@ -127,8 +237,8 @@
 				<!-- Transcript Area -->
 				<div class="transcript-area" bind:this={transcriptArea}>
 					<div class="transcript-content">
-						{#each currentEpisode.transcript as turn}
-							<div class="transcript-entry">
+						{#each displayTranscript as turn}
+							<div class="transcript-entry" class:generated={turn.is_generated}>
 								<div
 									class="speaker-label"
 									class:speaker-lamb={turn.speaker.toLowerCase().includes('lamb')}
@@ -136,6 +246,9 @@
 								>
 									<span class="speaker-dot"></span>
 									{turn.speaker}
+									{#if turn.is_generated}
+										<span class="generated-badge">AI</span>
+									{/if}
 								</div>
 								<div class="transcript-text">
 									{turn.text}
@@ -150,7 +263,11 @@
 								<span></span>
 								<span></span>
 							</div>
-							Waiting to resume conversation...
+							{#if isGenerating}
+								Generating conversation...
+							{:else}
+								Waiting to resume conversation...
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -159,13 +276,26 @@
 				<div class="controls-area">
 					<div class="input-label">Call In — Suggest a Topic</div>
 					<div class="topic-input-row">
-						<input type="text" class="topic-input" placeholder="e.g., television's effect on politics..." />
-						<button class="submit-btn">Call In</button>
+						<input
+							type="text"
+							class="topic-input"
+							placeholder="e.g., television's effect on politics..."
+							bind:value={topicInput}
+							onkeydown={handleKeydown}
+							disabled={isGenerating}
+						/>
+						<button class="submit-btn" onclick={handleCallIn} disabled={isGenerating}>
+							{isGenerating ? '...' : 'Call In'}
+						</button>
 					</div>
 					<div class="action-row">
-						<button class="action-btn">▶ Continue</button>
-						<button class="action-btn">↺ Restart</button>
-						<button class="action-btn guest-btn" onclick={() => (drawerOpen = true)}>
+						<button class="action-btn" onclick={handleContinue} disabled={isGenerating}>
+							{isGenerating ? '● Generating...' : '▶ Continue'}
+						</button>
+						<button class="action-btn" onclick={handleRestart} disabled={isGenerating}>
+							↺ Restart
+						</button>
+						<button class="action-btn guest-btn" onclick={() => (drawerOpen = true)} disabled={isGenerating}>
 							👤 Change Guest
 						</button>
 					</div>
@@ -427,6 +557,15 @@
 		margin-bottom: 0;
 	}
 
+	.transcript-entry.generated {
+		background: linear-gradient(90deg, rgba(201, 162, 39, 0.1) 0%, transparent 100%);
+		margin-left: -16px;
+		margin-right: -16px;
+		padding-left: 16px;
+		padding-right: 16px;
+		border-left: 3px solid var(--cspan-gold);
+	}
+
 	.speaker-label {
 		font-family: Georgia, serif;
 		font-weight: bold;
@@ -460,6 +599,15 @@
 
 	.speaker-guest .speaker-dot {
 		background: var(--cspan-red);
+	}
+
+	.generated-badge {
+		font-size: 8px;
+		background: var(--cspan-gold);
+		color: var(--cspan-blue-dark);
+		padding: 1px 4px;
+		border-radius: 2px;
+		margin-left: 4px;
 	}
 
 	.transcript-text {
@@ -556,6 +704,11 @@
 		border-color: var(--cspan-gold);
 	}
 
+	.topic-input:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
 	.submit-btn {
 		background: linear-gradient(180deg, #c9a227 0%, #9a7b1c 100%);
 		color: #1a1a4e;
@@ -572,15 +725,20 @@
 		white-space: nowrap;
 	}
 
-	.submit-btn:hover {
+	.submit-btn:hover:not(:disabled) {
 		background: linear-gradient(180deg, #d4af37 0%, #a8891f 100%);
 	}
 
-	.submit-btn:active {
+	.submit-btn:active:not(:disabled) {
 		transform: translate(1px, 1px);
 		box-shadow:
 			inset 0 1px 0 rgba(255, 255, 255, 0.4),
 			1px 1px 0 rgba(0, 0, 0, 0.3);
+	}
+
+	.submit-btn:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
 	}
 
 	/* Action buttons row */
@@ -609,8 +767,13 @@
 		gap: 5px;
 	}
 
-	.action-btn:hover {
+	.action-btn:hover:not(:disabled) {
 		background: linear-gradient(180deg, #5a7cc3 0%, #3a4a8c 100%);
+	}
+
+	.action-btn:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
 	}
 
 	.action-btn.guest-btn {
@@ -618,7 +781,7 @@
 		border-color: #5a151e;
 	}
 
-	.action-btn.guest-btn:hover {
+	.action-btn.guest-btn:hover:not(:disabled) {
 		background: linear-gradient(180deg, #9b3342 0%, #7a2a36 100%);
 	}
 

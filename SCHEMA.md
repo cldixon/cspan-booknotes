@@ -73,6 +73,29 @@ Benefits:
 
 ---
 
+## Table: `conversation_sessions`
+
+Stores AI-generated conversation continuations for analysis and potential replay.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | `UUID` | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique session identifier |
+| `program_id` | `TEXT` | REFERENCES programs(id) | Episode being resumed |
+| `session_token` | `TEXT` | | Anonymous user/session identifier (cookie-based) |
+| `user_topic` | `TEXT` | | Topic submitted by user (null if just "Continue") |
+| `generated_turns` | `JSONB` | | Array of {speaker, text, is_generated: true} objects |
+| `model` | `TEXT` | | Model used (e.g., "claude-3-haiku-20240307") |
+| `input_tokens` | `INTEGER` | | Tokens in the prompt |
+| `output_tokens` | `INTEGER` | | Tokens in the response |
+| `created_at` | `TIMESTAMP` | DEFAULT NOW() | When the conversation was generated |
+
+**Indexes:**
+- `idx_sessions_program_id` on `program_id` - For finding sessions by episode
+- `idx_sessions_session_token` on `session_token` - For finding user's sessions
+- `idx_sessions_created_at` on `created_at` - For time-based analysis
+
+---
+
 ## Example Queries
 
 ### Fetch episode list for UI
@@ -113,11 +136,32 @@ WHERE guest ILIKE '%Tom Brokaw%'
 ORDER BY air_date;
 ```
 
+### Get all sessions for an episode
+```sql
+SELECT id, user_topic, generated_turns, created_at
+FROM conversation_sessions
+WHERE program_id = '59640-1'
+ORDER BY created_at DESC;
+```
+
+### Get usage statistics
+```sql
+SELECT 
+    DATE(created_at) as date,
+    COUNT(*) as sessions,
+    SUM(input_tokens) as total_input_tokens,
+    SUM(output_tokens) as total_output_tokens
+FROM conversation_sessions
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+```
+
 ---
 
 ## Schema SQL
 
 ```sql
+-- Programs table
 CREATE TABLE IF NOT EXISTS programs (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -137,6 +181,24 @@ CREATE INDEX IF NOT EXISTS idx_programs_guest ON programs(guest);
 CREATE INDEX IF NOT EXISTS idx_programs_air_date ON programs(air_date);
 CREATE INDEX IF NOT EXISTS idx_programs_transcript ON programs USING GIN(transcript);
 
+-- Conversation sessions table
+CREATE TABLE IF NOT EXISTS conversation_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id TEXT REFERENCES programs(id) ON DELETE CASCADE,
+    session_token TEXT,
+    user_topic TEXT,
+    generated_turns JSONB,
+    model TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_program_id ON conversation_sessions(program_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_session_token ON conversation_sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON conversation_sessions(created_at);
+
+-- Update trigger for programs
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -165,6 +227,7 @@ CREATE TRIGGER update_programs_updated_at
 ## Future Considerations
 
 1. **Full-text search** - Add `tsvector` column for better transcript search
-2. **User data** - Separate tables for favorites, watch history, conversation sessions
+2. **User accounts** - If adding auth, link sessions to user IDs
 3. **Caching** - Consider caching formatted LLM prompts if transcript serialization becomes a bottleneck
 4. **Thumbnails** - Could add thumbnail_url if images are available from CSPAN
+5. **Session replay** - Could add endpoint to replay a saved conversation session
