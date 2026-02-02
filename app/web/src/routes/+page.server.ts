@@ -53,7 +53,7 @@ export async function load({ fetch }) {
 		const episodesData: EpisodesResponse = await episodesRes.json();
 
 		// Default to Christopher Hitchens episode
-		const defaultEpisodeId = '159943-1';
+		const defaultEpisodeId = '51559-1';
 
 		// Fetch full episode details including transcript
 		const episodeRes = await fetch(`${apiUrl}/api/episodes/${defaultEpisodeId}`);
