@@ -56,9 +56,17 @@
 		}
 	}
 
+	function closeDrawerOnEscape(e: KeyboardEvent) {
+		if (e.key === 'Escape' && drawerOpen) {
+			drawerOpen = false;
+		}
+	}
+
 	// Scroll to bottom on mount
 	onMount(() => {
 		scrollToBottom();
+		document.addEventListener('keydown', closeDrawerOnEscape);
+		return () => document.removeEventListener('keydown', closeDrawerOnEscape);
 	});
 </script>
 
@@ -67,7 +75,7 @@
 	<header class="header">
 		<div>
 			<div class="logo-text">BOOKNOTES</div>
-			<div class="logo-subtext">with Brian Lamb</div>
+			<div class="logo-subtext">with Brian Lamb — Resumed</div>
 		</div>
 		<div class="cspan-badge">C-SPAN</div>
 	</header>
@@ -79,7 +87,7 @@
 			</div>
 		{:else if currentEpisode}
 			<!-- Interview Container -->
-			<section class="interview-container" class:drawer-open={drawerOpen}>
+			<section class="interview-container">
 				<!-- Chyron Header -->
 				<div class="chyron-header">
 					<div class="participant-chyron host">
@@ -101,7 +109,7 @@
 							<div class="chyron-photo">👤</div>
 							<div class="chyron-text">
 								<div class="chyron-name">{currentEpisode.guest}</div>
-								<div class="chyron-title">Author</div>
+								<div class="chyron-title">Author, {currentEpisode.book_title || currentEpisode.title}</div>
 							</div>
 						</div>
 					</div>
@@ -138,38 +146,6 @@
 					</div>
 				</div>
 
-				<!-- Guest Drawer -->
-				<div class="guest-drawer">
-					<div class="drawer-header">
-						<span class="drawer-title">Select a Guest</span>
-						<button class="drawer-close" onclick={() => (drawerOpen = false)}>×</button>
-					</div>
-					<div class="drawer-search">
-						<input
-							type="text"
-							class="search-input"
-							placeholder="Search guests, books, topics..."
-							bind:value={searchQuery}
-						/>
-					</div>
-					<div class="guest-list">
-						{#each filteredEpisodes as episode}
-							<button
-								class="guest-list-item"
-								class:selected={currentEpisode && episode.id === currentEpisode.id}
-								onclick={() => selectEpisode(episode)}
-							>
-								<div class="guest-list-photo">👤</div>
-								<div class="guest-list-info">
-									<div class="guest-list-name">{episode.guest}</div>
-									<div class="guest-list-title">{episode.title}</div>
-								</div>
-								<div class="guest-list-date">{formatDate(episode.air_date)}</div>
-							</button>
-						{/each}
-					</div>
-				</div>
-
 				<!-- Controls Area -->
 				<div class="controls-area">
 					<div class="input-label">Call In — Suggest a Topic</div>
@@ -180,7 +156,7 @@
 					<div class="action-row">
 						<button class="action-btn">▶ Continue</button>
 						<button class="action-btn">↺ Restart</button>
-						<button class="action-btn guest-btn" onclick={() => (drawerOpen = !drawerOpen)}>
+						<button class="action-btn guest-btn" onclick={() => (drawerOpen = true)}>
 							👤 Change Guest
 						</button>
 					</div>
@@ -192,6 +168,45 @@
 			</div>
 		{/if}
 	</main>
+
+	<!-- Guest Selection Modal Overlay -->
+	{#if drawerOpen}
+		<div class="modal-overlay" onclick={() => (drawerOpen = false)}>
+			<div class="guest-modal" onclick={(e) => e.stopPropagation()}>
+				<div class="modal-header">
+					<span class="modal-title">Select a Guest</span>
+					<button class="modal-close" onclick={() => (drawerOpen = false)}>×</button>
+				</div>
+				<div class="modal-search">
+					<input
+						type="text"
+						class="search-input"
+						placeholder="Search guests, books, topics..."
+						bind:value={searchQuery}
+					/>
+				</div>
+				<div class="guest-list">
+					{#each filteredEpisodes as episode}
+						<button
+							class="guest-list-item"
+							class:selected={currentEpisode && episode.id === currentEpisode.id}
+							onclick={() => selectEpisode(episode)}
+						>
+							<div class="guest-list-photo">👤</div>
+							<div class="guest-list-info">
+								<div class="guest-list-name">{episode.guest}</div>
+								<div class="guest-list-title">{episode.title}</div>
+							</div>
+							<div class="guest-list-date">{formatDate(episode.air_date)}</div>
+						</button>
+					{/each}
+				</div>
+				<div class="modal-footer">
+					<span class="episode-count">{data.total} episodes available</span>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -347,6 +362,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		max-width: 200px;
 	}
 
 	.header-center {
@@ -597,63 +613,76 @@
 		background: linear-gradient(180deg, #9b3342 0%, #7a2a36 100%);
 	}
 
-	/* Guest drawer */
-	.guest-drawer {
-		display: none;
+	/* Modal Overlay */
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.75);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		padding: 20px;
+	}
+
+	.guest-modal {
 		background: var(--cspan-cream);
-		border-top: 3px solid var(--cspan-gold);
+		border: 3px solid var(--cspan-gold);
+		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+		width: 100%;
+		max-width: 500px;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
 	}
 
-	.interview-container.drawer-open .guest-drawer {
-		display: block;
-	}
-
-	.interview-container.drawer-open .controls-area {
-		border-top: none;
-	}
-
-	.drawer-header {
+	.modal-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 10px 12px;
-		background: linear-gradient(180deg, #e8e0d0 0%, #d4c5a0 100%);
-		border-bottom: 2px solid #ccc;
+		padding: 12px 16px;
+		background: linear-gradient(180deg, #2a3a7c 0%, #1a1a4e 100%);
+		border-bottom: 3px solid var(--cspan-gold);
 	}
 
-	.drawer-title {
+	.modal-title {
 		font-family: Georgia, serif;
-		font-size: 13px;
+		font-size: 16px;
 		font-weight: bold;
-		color: var(--cspan-blue-dark);
+		color: var(--cspan-cream);
 	}
 
-	.drawer-close {
+	.modal-close {
 		background: none;
 		border: none;
-		font-size: 18px;
+		font-size: 24px;
 		cursor: pointer;
-		color: #666;
+		color: var(--cspan-cream);
 		padding: 0 5px;
+		line-height: 1;
 	}
 
-	.drawer-close:hover {
-		color: var(--cspan-red);
+	.modal-close:hover {
+		color: var(--cspan-gold);
 	}
 
-	.drawer-search {
-		padding: 10px 12px;
+	.modal-search {
+		padding: 12px 16px;
 		background: #f5f0e1;
 		border-bottom: 1px solid #ddd;
 	}
 
 	.search-input {
 		width: 100%;
-		padding: 8px 10px;
-		font-size: 13px;
+		padding: 10px 12px;
+		font-size: 14px;
 		border: 2px solid var(--cspan-blue-mid);
 		background: white;
 		font-family: inherit;
+		box-sizing: border-box;
 	}
 
 	.search-input:focus {
@@ -667,15 +696,17 @@
 	}
 
 	.guest-list {
-		max-height: 200px;
+		flex: 1;
 		overflow-y: auto;
+		min-height: 200px;
+		max-height: 400px;
 	}
 
 	.guest-list-item {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 10px 12px;
+		gap: 12px;
+		padding: 12px 16px;
 		cursor: pointer;
 		border: none;
 		border-bottom: 1px solid #ddd;
@@ -693,19 +724,19 @@
 	.guest-list-item.selected {
 		background: linear-gradient(90deg, #fff9e6 0%, #f5e6b3 100%);
 		border-left: 4px solid var(--cspan-gold);
-		padding-left: 8px;
+		padding-left: 12px;
 	}
 
 	.guest-list-photo {
-		width: 32px;
-		height: 32px;
+		width: 36px;
+		height: 36px;
 		border-radius: 50%;
 		background: #333;
 		border: 2px solid var(--cspan-blue-mid);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 12px;
+		font-size: 14px;
 		color: #666;
 		flex-shrink: 0;
 	}
@@ -721,13 +752,13 @@
 
 	.guest-list-name {
 		font-family: Georgia, serif;
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: bold;
 		color: #1a1a4e;
 	}
 
 	.guest-list-title {
-		font-size: 10px;
+		font-size: 11px;
 		color: #666;
 		white-space: nowrap;
 		overflow: hidden;
@@ -735,10 +766,22 @@
 	}
 
 	.guest-list-date {
-		font-size: 9px;
+		font-size: 10px;
 		color: var(--cspan-red);
 		font-weight: bold;
 		flex-shrink: 0;
+	}
+
+	.modal-footer {
+		padding: 10px 16px;
+		background: linear-gradient(180deg, #e8e0d0 0%, #d4c5a0 100%);
+		border-top: 2px solid #ccc;
+		text-align: center;
+	}
+
+	.episode-count {
+		font-size: 11px;
+		color: #666;
 	}
 
 	/* Footer */
@@ -781,6 +824,7 @@
 
 		.chyron-title {
 			font-size: 8px;
+			max-width: 120px;
 		}
 
 		.transcript-content {
@@ -805,6 +849,14 @@
 		.action-btn {
 			padding: 5px 10px;
 			font-size: 9px;
+		}
+
+		.modal-overlay {
+			padding: 10px;
+		}
+
+		.guest-modal {
+			max-height: 90vh;
 		}
 	}
 </style>
