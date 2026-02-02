@@ -13,7 +13,7 @@ All episode data lives in one `programs` table. This provides:
 1. **Query simplicity** - One query gets everything, no JOINs
 2. **Atomic operations** - Episode data is always consistent
 3. **Easier maintenance** - Single source of truth
-4. **Good enough for scale** - ~800 episodes is small; no need for normalization
+4. **Good enough for scale** - ~809 episodes is small; no need for normalization
 
 ### Transcript Storage (JSONB)
 
@@ -21,8 +21,8 @@ Transcripts are stored as a JSONB array preserving speaker information:
 
 ```json
 [
-  {"speaker": "BRIAN LAMB", "text": "Welcome to Booknotes..."},
-  {"speaker": "GUEST NAME", "text": "Thank you for having me..."}
+  {"speaker": "BRIAN LAMB, HOST:", "text": "Welcome to Booknotes..."},
+  {"speaker": "GUEST NAME, AUTHOR, \"BOOK TITLE\":", "text": "Thank you for having me..."}
 ]
 ```
 
@@ -37,8 +37,8 @@ Related episodes are stored as a JSONB array with minimal metadata:
 
 ```json
 [
-  {"id": "12345", "title": "Episode Title", "guest": "Guest Name"},
-  {"id": "67890", "title": "Another Episode", "guest": "Another Guest"}
+  {"id": "121264-1", "title": "The Greatest Generation", "guest": "Tom Brokaw"},
+  {"id": "38281-1", "title": "This Little Light of Mine", "guest": "Kay Mills"}
 ]
 ```
 
@@ -53,15 +53,14 @@ Benefits:
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `id` | `TEXT` | PRIMARY KEY | Unique episode identifier (from CSPAN) |
-| `title` | `TEXT` | NOT NULL | Episode title |
+| `id` | `TEXT` | PRIMARY KEY | Unique episode identifier (e.g., "59640-1") |
+| `title` | `TEXT` | NOT NULL | Episode/book title |
 | `guest` | `TEXT` | NOT NULL | Primary guest name |
 | `air_date` | `DATE` | | Original broadcast date |
 | `summary` | `TEXT` | | Episode description/summary |
 | `book_title` | `TEXT` | | Featured book title |
-| `book_author` | `TEXT` | | Featured book author |
-| `thumbnail_url` | `TEXT` | | Episode thumbnail image URL |
-| `video_url` | `TEXT` | | Link to video on CSPAN |
+| `book_isbn` | `TEXT` | | Book ISBN |
+| `url` | `TEXT` | | Link to episode on booknotes.c-span.org |
 | `transcript` | `JSONB` | | Array of {speaker, text} objects |
 | `related_episodes` | `JSONB` | | Array of {id, title, guest} objects |
 | `created_at` | `TIMESTAMP` | DEFAULT NOW() | Record creation timestamp |
@@ -78,7 +77,7 @@ Benefits:
 
 ### Fetch episode list for UI
 ```sql
-SELECT id, title, guest, air_date, summary, book_title, thumbnail_url
+SELECT id, title, guest, air_date, summary, book_title
 FROM programs
 ORDER BY air_date DESC
 LIMIT 20 OFFSET 0;
@@ -86,14 +85,16 @@ LIMIT 20 OFFSET 0;
 
 ### Fetch single episode with everything
 ```sql
-SELECT * FROM programs WHERE id = 'episode-123';
+SELECT * FROM programs WHERE id = '59640-1';
 ```
 
 ### Format transcript for LLM prompt (application code)
-```python
-def format_transcript_for_llm(transcript: list) -> str:
-    lines = [f"{turn['speaker']}: {turn['text']}" for turn in transcript]
-    return "\n\n".join(lines)
+```typescript
+function formatTranscriptForLLM(transcript: {speaker: string, text: string}[]): string {
+  return transcript
+    .map(turn => `${turn.speaker} ${turn.text}`)
+    .join('\n\n');
+}
 ```
 
 ### Search transcripts
@@ -102,6 +103,14 @@ SELECT id, title, guest
 FROM programs
 WHERE transcript::text ILIKE '%constitution%'
 LIMIT 10;
+```
+
+### Get episodes by guest
+```sql
+SELECT id, title, air_date
+FROM programs
+WHERE guest ILIKE '%Tom Brokaw%'
+ORDER BY air_date;
 ```
 
 ---
@@ -116,9 +125,8 @@ CREATE TABLE IF NOT EXISTS programs (
     air_date DATE,
     summary TEXT,
     book_title TEXT,
-    book_author TEXT,
-    thumbnail_url TEXT,
-    video_url TEXT,
+    book_isbn TEXT,
+    url TEXT,
     transcript JSONB,
     related_episodes JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -145,8 +153,18 @@ CREATE TRIGGER update_programs_updated_at
 
 ---
 
+## Data Statistics
+
+- **Total episodes**: 809
+- **Total transcript turns**: 160,733
+- **Related episode links**: 4,584
+- **Date range**: 1989-2004
+
+---
+
 ## Future Considerations
 
 1. **Full-text search** - Add `tsvector` column for better transcript search
-2. **User data** - Separate tables for favorites, watch history, etc.
+2. **User data** - Separate tables for favorites, watch history, conversation sessions
 3. **Caching** - Consider caching formatted LLM prompts if transcript serialization becomes a bottleneck
+4. **Thumbnails** - Could add thumbnail_url if images are available from CSPAN
