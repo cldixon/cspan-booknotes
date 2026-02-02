@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
-	let apiMessage = 'Loading...';
-	let apiTimestamp = '';
-	let error = '';
+	let { data } = $props();
 
-	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+	let apiMessage = $state('Loading...');
+	let apiTimestamp = $state('');
+	let error = $state('');
 
 	onMount(async () => {
 		try {
-			const response = await fetch(`${API_URL}/api/hello`);
+			const response = await fetch(`${data.apiUrl}/api/hello`);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
-			const data = await response.json();
-			apiMessage = data.message;
-			apiTimestamp = data.timestamp;
+			const result = await response.json();
+			apiMessage = result.message;
+			apiTimestamp = result.timestamp;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Unknown error';
 			apiMessage = 'Failed to connect to API';
