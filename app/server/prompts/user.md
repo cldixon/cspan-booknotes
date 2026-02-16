@@ -1,6 +1,6 @@
 ---
 name: booknotes-user
-version: "1.0"
+version: "2.0"
 description: User prompt for continuing Booknotes conversation
 ---
 
