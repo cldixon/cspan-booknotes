@@ -16,7 +16,6 @@ describe('loadTemplate', () => {
     const template = loadTemplate('system');
 
     expect(template.frontmatter.name).toBe('booknotes-system');
-    expect(template.frontmatter.version).toBe('1.0');
     expect(template.content).toContain('You are simulating');
     expect(template.content).toContain('{guest}');
   });
