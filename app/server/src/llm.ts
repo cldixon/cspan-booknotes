@@ -4,7 +4,7 @@ import { buildSystemPrompt, buildUserPrompt } from './prompts';
 
 const anthropic = new Anthropic();
 
-const MODEL = 'claude-3-haiku-20240307';
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6';
 
 // Number of recent turns to include for context (to manage token usage)
 const CONTEXT_TURNS = 20;

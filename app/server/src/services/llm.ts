@@ -20,7 +20,7 @@ Continue the conversation in their authentic voices and styles.`;
 
   // Placeholder implementation
   const message = await client.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
+    model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
     max_tokens: 1024,
     system: systemPrompt,
     messages: [
