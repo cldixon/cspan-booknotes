@@ -4,7 +4,7 @@ version: "1.0"
 description: User prompt for continuing Booknotes conversation
 ---
 
-Here is the recent conversation for context:
+{transcript_lead_in}
 
 {transcript_context}
 

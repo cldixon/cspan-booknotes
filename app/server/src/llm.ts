@@ -1,13 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { TranscriptTurn, Program } from './db';
-import { buildSystemPrompt, buildUserPrompt } from './prompts';
+import { buildSystemPrompt, buildUserPrompt, prepareTranscriptContext } from './prompts';
 
 const anthropic = new Anthropic();
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6';
-
-// Number of recent turns to include for context (to manage token usage)
-const CONTEXT_TURNS = 20;
 
 // Transition phrases for when Lamb "resumes" the conversation
 const RESUME_WITH_TOPIC_PHRASES = [
@@ -69,15 +66,17 @@ export async function resumeConversation(
   program: Program,
   userTopic: string | null
 ): Promise<ResumeConversationResult> {
-  // Get recent transcript for context
-  const recentTranscript = program.transcript.slice(-CONTEXT_TURNS);
+  const { turns: contextTranscript, leadIn, separatorAfterIndex } = prepareTranscriptContext(program.transcript);
 
   const transitionPhrase = userTopic
     ? getRandomPhrase(RESUME_WITH_TOPIC_PHRASES)
     : getRandomPhrase(RESUME_CONTINUE_PHRASES);
 
   const systemPrompt = buildSystemPrompt(program);
-  const userPrompt = buildUserPrompt(program, recentTranscript, userTopic, transitionPhrase);
+  const userPrompt = buildUserPrompt(program, contextTranscript, userTopic, transitionPhrase, {
+    leadIn,
+    separatorAfterIndex,
+  });
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -105,15 +104,17 @@ export async function* resumeConversationStream(
   program: Program,
   userTopic: string | null
 ): AsyncGenerator<{ type: 'turn' | 'done'; turn?: TranscriptTurn; inputTokens?: number; outputTokens?: number; model?: string }> {
-  // Get recent transcript for context
-  const recentTranscript = program.transcript.slice(-CONTEXT_TURNS);
+  const { turns: contextTranscript, leadIn, separatorAfterIndex } = prepareTranscriptContext(program.transcript);
 
   const transitionPhrase = userTopic
     ? getRandomPhrase(RESUME_WITH_TOPIC_PHRASES)
     : getRandomPhrase(RESUME_CONTINUE_PHRASES);
 
   const systemPrompt = buildSystemPrompt(program);
-  const userPrompt = buildUserPrompt(program, recentTranscript, userTopic, transitionPhrase);
+  const userPrompt = buildUserPrompt(program, contextTranscript, userTopic, transitionPhrase, {
+    leadIn,
+    separatorAfterIndex,
+  });
 
   const stream = await anthropic.messages.stream({
     model: MODEL,
