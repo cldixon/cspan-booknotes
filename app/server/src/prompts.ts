@@ -8,6 +8,89 @@ const __dirname = dirname(__filename);
 
 const PROMPTS_DIR = join(__dirname, '..', 'prompts');
 
+// --- Transcript context strategy ---
+
+export type TranscriptStrategy = 'recent' | 'complete' | 'abridged';
+
+const RECENT_N = 25;
+const ABRIDGED_FIRST_N = 20;
+const ABRIDGED_LAST_N = 20;
+
+const ABRIDGED_SEPARATOR = '\n\n[... middle portion of interview omitted ...]\n\n';
+
+const STRATEGY_LEAD_INS: Record<TranscriptStrategy, string> = {
+  complete: 'Below is the complete interview transcript:',
+  recent: 'Below are the most recent exchanges from the interview:',
+  abridged: 'Below is the beginning and end of the interview, with middle portions omitted for brevity:',
+};
+
+export function getTranscriptStrategy(): TranscriptStrategy {
+  const raw = process.env.TRANSCRIPT_STRATEGY || 'abridged';
+  const valid: TranscriptStrategy[] = ['recent', 'complete', 'abridged'];
+  if (valid.includes(raw as TranscriptStrategy)) {
+    return raw as TranscriptStrategy;
+  }
+  console.warn(
+    `Invalid TRANSCRIPT_STRATEGY "${raw}", falling back to "abridged". Valid values: ${valid.join(', ')}`
+  );
+  return 'abridged';
+}
+
+export function prepareTranscriptContext(
+  transcript: TranscriptTurn[],
+  strategy?: TranscriptStrategy
+): { turns: TranscriptTurn[]; leadIn: string; separatorAfterIndex?: number } {
+  const resolved = strategy ?? getTranscriptStrategy();
+
+  switch (resolved) {
+    case 'complete':
+      return {
+        turns: transcript,
+        leadIn: STRATEGY_LEAD_INS.complete,
+      };
+
+    case 'recent':
+      return {
+        turns: transcript.slice(-RECENT_N),
+        leadIn: STRATEGY_LEAD_INS.recent,
+      };
+
+    case 'abridged': {
+      if (transcript.length <= ABRIDGED_FIRST_N + ABRIDGED_LAST_N) {
+        return {
+          turns: transcript,
+          leadIn: STRATEGY_LEAD_INS.complete,
+        };
+      }
+      const firstPart = transcript.slice(0, ABRIDGED_FIRST_N);
+      const lastPart = transcript.slice(-ABRIDGED_LAST_N);
+      return {
+        turns: [...firstPart, ...lastPart],
+        leadIn: STRATEGY_LEAD_INS.abridged,
+        separatorAfterIndex: ABRIDGED_FIRST_N - 1,
+      };
+    }
+  }
+}
+
+export function formatTranscriptTurns(
+  turns: TranscriptTurn[],
+  options?: { abridgedSeparatorAfter?: number }
+): string {
+  const lines = turns.map((turn, index) => {
+    const isLamb = turn.speaker.toLowerCase().includes('lamb');
+    const prefix = isLamb ? 'LAMB' : 'GUEST';
+    const line = `${prefix}: ${turn.text}`;
+
+    if (options?.abridgedSeparatorAfter !== undefined && index === options.abridgedSeparatorAfter) {
+      return line + ABRIDGED_SEPARATOR;
+    }
+    return line;
+  });
+
+  return lines.join('\n\n');
+}
+
 export interface PromptTemplate {
   frontmatter: Record<string, string>;
   content: string;
@@ -119,26 +202,23 @@ export function buildSystemPrompt(program: Program): string {
  */
 export function buildUserPrompt(
   program: Program,
-  recentTranscript: TranscriptTurn[],
+  contextTranscript: TranscriptTurn[],
   userTopic: string | null,
-  transitionPhrase: string
+  transitionPhrase: string,
+  options: { leadIn: string; separatorAfterIndex?: number }
 ): string {
   const template = loadTemplate('user');
 
-  // Format transcript context
-  const transcriptContext = recentTranscript
-    .map((turn) => {
-      const isLamb = turn.speaker.toLowerCase().includes('lamb');
-      const prefix = isLamb ? 'LAMB' : 'GUEST';
-      return `${prefix}: ${turn.text}`;
-    })
-    .join('\n\n');
+  const transcriptContext = formatTranscriptTurns(contextTranscript, {
+    abridgedSeparatorAfter: options.separatorAfterIndex,
+  });
 
   // Process conditionals first
   const processed = processConditionals(template.content, { user_topic: userTopic });
 
   // Then interpolate variables
   const variables: Record<string, string> = {
+    transcript_lead_in: options.leadIn,
     transcript_context: transcriptContext,
     user_topic: userTopic || '',
     transition_phrase: transitionPhrase,

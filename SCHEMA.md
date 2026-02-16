@@ -84,7 +84,7 @@ Stores AI-generated conversation continuations for analysis and potential replay
 | `session_token` | `TEXT` | | Anonymous user/session identifier (cookie-based) |
 | `user_topic` | `TEXT` | | Topic submitted by user (null if just "Continue") |
 | `generated_turns` | `JSONB` | | Array of {speaker, text, is_generated: true} objects |
-| `model` | `TEXT` | | Model used (e.g., "claude-3-haiku-20240307") |
+| `model` | `TEXT` | | Model used (e.g., "claude-opus-4-6") |
 | `input_tokens` | `INTEGER` | | Tokens in the prompt |
 | `output_tokens` | `INTEGER` | | Tokens in the response |
 | `created_at` | `TIMESTAMP` | DEFAULT NOW() | When the conversation was generated |

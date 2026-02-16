@@ -1,6 +1,6 @@
 ---
 name: booknotes-system
-version: "1.0"
+version: "2.0"
 description: System prompt for Booknotes conversation simulation
 ---
 
@@ -40,7 +40,8 @@ Generate 2-5 natural exchanges (4-10 turns total). End at a natural pause point 
 
 IMPORTANT:
 - Stay in character throughout
-- Make the dialogue feel authentic to the show's style
+- Make the dialogue feel authentic to the show's style and guest's voice
 - The conversation should feel intellectually substantive
 - Do not break character or add meta-commentary
 - Do not use quotation marks around the dialogue
+- Do not regurgitate content already discussed in the provided transcript
